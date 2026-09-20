@@ -66,3 +66,63 @@
 - [ ] signed release artifacts
 - [ ] remote Nuntius node design
 - [ ] authenticated remote MCP design
+
+## Orchestrator v0.7.1 Live E2E
+
+> Test-only section for `chatgpt-roadmap-orchestrator`.
+> Do not modify Nuntius product code for these tasks.
+> Integration method: merge or fast-forward only.
+> Worker results must be independently verified before completion.
+
+### Stage 1 ? ChatGPT single-worker
+
+- [ ] E2E-01 ChatGPT browser worker proof
+  <!-- orchestrator: id=E2E-01 worker=chatgpt-browser parallel=deny writes=orchestrator-e2e/chatgpt -->
+
+  Create `orchestrator-e2e/chatgpt/proof.md`.
+
+  Acceptance:
+  - file exists
+  - contains `E2E-01`
+  - contains `worker=chatgpt-browser`
+  - no files outside `orchestrator-e2e/chatgpt` are modified by the worker
+
+### Stage 2 ? Claude Local single-worker
+
+- [ ] E2E-02 Claude local worker proof
+  <!-- orchestrator: id=E2E-02 worker=claude-local deps=E2E-01 parallel=deny writes=orchestrator-e2e/claude machine=main-pc transport=auto needs=local,windows,terminal -->
+
+  Run the Nuntius test suite locally and create
+  `orchestrator-e2e/claude/proof.md`.
+
+  Acceptance:
+  - run `go test ./...`
+  - record PASS or FAIL in the proof file
+  - proof file contains `E2E-02`
+  - proof file contains the observed Claude transport (`cli` or `gui`)
+  - no files outside `orchestrator-e2e/claude` are modified by the worker
+
+### Stage 3 ? Mixed parallel workers
+
+- [ ] E2E-03 Parallel ChatGPT worker
+  <!-- orchestrator: id=E2E-03 worker=chatgpt-browser deps=E2E-02 parallel=allow writes=orchestrator-e2e/parallel/chatgpt -->
+
+  Create `orchestrator-e2e/parallel/chatgpt/proof.md`.
+
+  Acceptance:
+  - contains `E2E-03`
+  - contains `parallel-worker=chatgpt`
+  - modify only the declared write scope
+
+- [ ] E2E-04 Parallel Claude Local worker
+  <!-- orchestrator: id=E2E-04 worker=claude-local deps=E2E-02 parallel=allow writes=orchestrator-e2e/parallel/claude machine=main-pc transport=auto needs=local,windows,terminal -->
+
+  Run `go test ./...` locally and create
+  `orchestrator-e2e/parallel/claude/proof.md`.
+
+  Acceptance:
+  - contains `E2E-04`
+  - contains `parallel-worker=claude-local`
+  - records whether `go test ./...` passed
+  - modify only the declared write scope
+

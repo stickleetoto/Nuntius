@@ -1,6 +1,7 @@
 package platform
 
 import (
+	"math"
 	"testing"
 	"time"
 )
@@ -23,16 +24,71 @@ func TestParseRTT(t *testing.T) {
 }
 
 func TestParseTraceOutput(t *testing.T) {
-	out := `traceroute to 8.8.8.8 (8.8.8.8), 20 hops max
- 1  192.168.0.1  1.23 ms
- 2  *
- 3  8.8.8.8  12.50 ms
-`
-	got := parseTraceOutput(out, "8.8.8.8", "traceroute", 20)
-	if len(got.Hops) != 3 {
-		t.Fatalf("expected 3 hops, got %#v", got.Hops)
+	cases := []struct {
+		name         string
+		output       string
+		targetIP     string
+		wantRTT      float64
+		wantAddress  string
+		wantTimedOut bool
+		wantReached  bool
+	}{
+		{
+			name:        "all sub-millisecond",
+			output:      "1  <1 ms  <1ms  < 1 ms  192.168.0.1\n",
+			targetIP:    "192.168.0.1",
+			wantRTT:     0.5,
+			wantAddress: "192.168.0.1",
+			wantReached: true,
+		},
+		{
+			name:        "mixed",
+			output:      "1  <1 ms  2 ms  2,5 ms  192.168.0.1\n",
+			wantRTT:     (0.5 + 2 + 2.5) / 3,
+			wantAddress: "192.168.0.1",
+		},
+		{
+			name:        "localized decimal comma",
+			output:      "1  192.168.0.1  1,25 ms  2,75 ms\n",
+			wantRTT:     2,
+			wantAddress: "192.168.0.1",
+		},
+		{
+			name:        "ordinary",
+			output:      "1  8.8.8.8  12.50 ms\n",
+			targetIP:    "8.8.8.8",
+			wantRTT:     12.50,
+			wantAddress: "8.8.8.8",
+			wantReached: true,
+		},
+		{
+			name:         "timeout",
+			output:       "1  *  *  *\n",
+			targetIP:     "8.8.8.8",
+			wantTimedOut: true,
+		},
 	}
-	if got.Hops[0].Address != "192.168.0.1" || got.Hops[1].TimedOut != true || !got.Reached {
-		t.Fatalf("unexpected trace parse: %#v", got)
+
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			got := parseTraceOutput(tc.output, tc.targetIP, "traceroute", 20)
+			if len(got.Hops) != 1 {
+				t.Fatalf("expected 1 hop, got %#v", got.Hops)
+			}
+
+			hop := got.Hops[0]
+			if math.Abs(hop.RTTMS-tc.wantRTT) > 1e-9 {
+				t.Fatalf("RTTMS=%v want %v", hop.RTTMS, tc.wantRTT)
+			}
+			if hop.Address != tc.wantAddress {
+				t.Fatalf("Address=%q want %q", hop.Address, tc.wantAddress)
+			}
+			if hop.TimedOut != tc.wantTimedOut {
+				t.Fatalf("TimedOut=%v want %v", hop.TimedOut, tc.wantTimedOut)
+			}
+			if got.Reached != tc.wantReached {
+				t.Fatalf("Reached=%v want %v", got.Reached, tc.wantReached)
+			}
+		})
 	}
 }

@@ -119,6 +119,9 @@ func parseTraceOutput(output, targetIP, tool string, maxHops int) model.TraceRes
 			for _, m := range matches {
 				v := strings.ReplaceAll(m[1], ",", ".")
 				if f, err := strconv.ParseFloat(v, 64); err == nil {
+					if f == 1 && strings.Contains(m[0], "<") {
+						f = 0.5
+					}
 					total += f
 					count++
 				}

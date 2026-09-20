@@ -54,12 +54,20 @@ func (s PathService) Trace(ctx context.Context, target string, maxHops int, time
 func (s PathService) Inspect(ctx context.Context, target string, count, maxHops int, timeout time.Duration) (model.PathReport, error) {
 	started := time.Now()
 	report := model.PathReport{Target: target, StartedAt: started.UTC(), Overall: "ok"}
+	finish := func(err error) (model.PathReport, error) {
+		report.DurationMS = time.Since(started).Milliseconds()
+		if err != nil && report.Overall == "ok" {
+			report.Overall = "degraded"
+		}
+		return report, err
+	}
+
+	if err := ctx.Err(); err != nil {
+		return finish(err)
+	}
 
 	ping, pingErr := s.Ping(ctx, target, count, timeout)
-	if pingErr != nil {
-		report.Warnings = append(report.Warnings, "ping: "+pingErr.Error())
-		report.Overall = "degraded"
-	} else {
+	if pingErr == nil {
 		report.Ping = &ping
 		if ping.Received == 0 {
 			report.Overall = "unreachable"
@@ -67,14 +75,16 @@ func (s PathService) Inspect(ctx context.Context, target string, count, maxHops 
 			report.Overall = "degraded"
 		}
 	}
+	if err := ctx.Err(); err != nil {
+		return finish(err)
+	}
+	if pingErr != nil {
+		report.Warnings = append(report.Warnings, "ping: "+pingErr.Error())
+		report.Overall = "degraded"
+	}
 
 	trace, traceErr := s.Trace(ctx, target, maxHops, timeout)
-	if traceErr != nil {
-		report.Warnings = append(report.Warnings, "trace: "+traceErr.Error())
-		if report.Overall == "ok" {
-			report.Overall = "degraded"
-		}
-	} else {
+	if traceErr == nil {
 		report.Trace = &trace
 		if trace.Reached && report.Overall == "unreachable" {
 			// ICMP echo can be filtered independently of general path reachability.
@@ -85,7 +95,15 @@ func (s PathService) Inspect(ctx context.Context, target string, count, maxHops 
 			report.Overall = "degraded"
 		}
 	}
+	if err := ctx.Err(); err != nil {
+		return finish(err)
+	}
+	if traceErr != nil {
+		report.Warnings = append(report.Warnings, "trace: "+traceErr.Error())
+		if report.Overall == "ok" {
+			report.Overall = "degraded"
+		}
+	}
 
-	report.DurationMS = time.Since(started).Milliseconds()
-	return report, nil
+	return finish(nil)
 }
